@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageCircle, SendHorizontal, X } from "lucide-react";
+import DOMPurify from "dompurify";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./ui/button";
 import { loadHistory, sendMessage, type ChatMessage } from "../lib/chat-api";
@@ -27,6 +28,15 @@ export function ChatWidget() {
   }, []);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
+
+  function renderSafeHtml(content: string) {
+    return {
+      __html: DOMPurify.sanitize(content, {
+        ALLOWED_TAGS: ["b", "strong", "i", "em", "u", "br", "p", "ul", "ol", "li", "a", "code", "pre"],
+        ALLOWED_ATTR: ["href", "target", "rel"]
+      })
+    };
+  }
 
   async function handleSend() {
     if (!canSend || !sessionId) return;
@@ -74,7 +84,7 @@ export function ChatWidget() {
                     : "mr-auto bg-slate-800/90 text-slate-100"
                 }`}
               >
-                {message.content}
+                <div dangerouslySetInnerHTML={renderSafeHtml(message.content)} />
               </div>
             ))}
             {isSending && <div className="text-xs text-slate-400">AI is thinking...</div>}
