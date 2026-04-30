@@ -1,9 +1,12 @@
+import { getAuthToken } from "./auth";
+
 export type ConversationMode = "ai" | "human";
 export type ChannelType = "web" | "telegram" | "slack" | "multi";
 
 export type AdminConversation = {
   id: string;
   channel: ChannelType;
+  displayLabel?: string;
   sessionId: string;
   userId?: string | null;
   profileId?: string | null;
@@ -24,6 +27,7 @@ export type AdminMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
+  channel?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -49,9 +53,11 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const adminToken = process.env.NEXT_PUBLIC_ADMIN_API_TOKEN ?? "dev-admin-token";
 
 function adminHeaders(contentType = false): HeadersInit {
+  const token = getAuthToken();
   return {
     ...(contentType ? { "Content-Type": "application/json" } : {}),
-    "x-admin-token": adminToken
+    "x-admin-token": adminToken,
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -131,11 +137,13 @@ export async function getAnalytics(): Promise<AdminAnalytics> {
 export async function uploadKnowledgeDocument(file: File): Promise<UploadedKnowledgeDocument> {
   const formData = new FormData();
   formData.append("file", file);
+  const token = getAuthToken();
 
   const response = await fetch(`${apiBase}/api/admin/knowledge/upload`, {
     method: "POST",
     headers: {
-      "x-admin-token": adminToken
+      "x-admin-token": adminToken,
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: formData
   });

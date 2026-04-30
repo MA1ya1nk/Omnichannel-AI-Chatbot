@@ -16,6 +16,7 @@ const slackApp = new App({
   token: env.SLACK_BOT_TOKEN || "missing-bot-token",
   receiver
 });
+const assistantName = "Omnichannel AI";
 
 if (isSlackConfigured) {
   slackApp.event("message", async ({ event, client, logger }) => {
@@ -32,11 +33,35 @@ if (isSlackConfigured) {
       }
     }
 
+    let typingMessageTs: string | null = null;
+    try {
+      const typingMessage = await client.chat.postMessage({
+        channel: event.channel,
+        text: `${assistantName} is typing...`
+      });
+      typingMessageTs = typingMessage.ts ?? null;
+    } catch {
+      typingMessageTs = null;
+    }
+
     const result = await processInboundMessage(normalized);
     if (result.interruptedForHuman || !result.assistantText) {
+      if (typingMessageTs) {
+        await client.chat.delete({
+          channel: event.channel,
+          ts: typingMessageTs
+        }).catch(() => undefined);
+      }
       return;
     }
     const rendered = renderSlackResponse(result.assistantText);
+
+    if (typingMessageTs) {
+      await client.chat.delete({
+        channel: event.channel,
+        ts: typingMessageTs
+      }).catch(() => undefined);
+    }
 
     await client.chat.postMessage({
       channel: event.channel,

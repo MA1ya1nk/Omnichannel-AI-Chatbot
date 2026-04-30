@@ -12,6 +12,7 @@ Unified AI support platform across web + messaging channels:
 - Human takeover mode + canned responses
 - Real-time unified admin inbox (Socket.io)
 - Analytics API + Recharts dashboard
+- End-user authentication (JWT) for personal chat continuity
 
 ## Project Structure
 
@@ -36,6 +37,8 @@ Frontend: `http://localhost:3000`
 Backend health: `http://localhost:4000/health`
 Admin dashboard: `http://localhost:3000/admin`
 Analytics dashboard: `http://localhost:3000/admin/analytics`
+Sign in: `http://localhost:3000/signin`
+Sign up: `http://localhost:3000/signup`
 
 ## Webhooks
 
@@ -102,10 +105,23 @@ Analytics dashboard: `http://localhost:3000/admin/analytics`
   - Returns channel counts, hourly volume, and average response time.
 - Once a knowledge document is uploaded, chat responses automatically include retrieval context when relevant.
 
+## Authentication Endpoints
+
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me` (Bearer token required)
+- `POST /api/chat/secure/message` (Bearer token required)
+- `POST /api/users/me/link` (Bearer token required)
+
 ## Cross-channel Continuity
 
 - Use `POST /api/admin/identity-links` to map multiple channel identities to one canonical profile.
 - Once linked, AI context fetches recent profile-level history across channels (web/telegram/slack).
+- Logged-in users can connect channels from the homepage using:
+  - `POST /api/users/me/connect/telegram` (generates Telegram deep-link token)
+  - `POST /api/users/me/connect/slack/start` (starts Slack OAuth)
+  - `GET /api/users/connect/slack/callback` (completes Slack OAuth link)
+  - `GET /api/users/me/connections` (channel connection status)
 
 ## Architecture Diagram
 

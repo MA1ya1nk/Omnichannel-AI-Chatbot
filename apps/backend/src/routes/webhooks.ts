@@ -14,6 +14,7 @@ const router = Router();
 
 const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN);
 const telegramBot = telegramConfigured ? new TelegramBot(env.TELEGRAM_BOT_TOKEN) : null;
+const assistantName = env.TELEGRAM_BOT_USERNAME || "Omnichannel AI";
 
 if (!telegramConfigured) {
   console.warn("Telegram webhook is not configured. Add TELEGRAM_BOT_TOKEN.");
@@ -78,15 +79,31 @@ router.post("/telegram", async (req, res, next) => {
       }
     }
 
+    const chatId = normalized.metadata?.chatId;
+    if (typeof chatId !== "number") {
+      return res.status(400).json({ error: "Invalid Telegram chat id." });
+    }
+
+    let typingMessageId: number | null = null;
+    try {
+      await telegramBot.sendChatAction(chatId, "typing");
+      const typingMessage = await telegramBot.sendMessage(chatId, `${assistantName} is typing...`);
+      typingMessageId = typingMessage.message_id;
+    } catch {
+      typingMessageId = null;
+    }
+
     const result = await processInboundMessage(normalized);
     if (result.interruptedForHuman || !result.assistantText) {
+      if (typingMessageId) {
+        await telegramBot.deleteMessage(chatId, typingMessageId).catch(() => undefined);
+      }
       return res.status(200).json({ status: "human_mode_enabled", conversationId: result.conversationId });
     }
     const rendered = renderTelegramResponse(result.assistantText);
 
-    const chatId = normalized.metadata?.chatId;
-    if (typeof chatId !== "number") {
-      return res.status(400).json({ error: "Invalid Telegram chat id." });
+    if (typingMessageId) {
+      await telegramBot.deleteMessage(chatId, typingMessageId).catch(() => undefined);
     }
 
     await telegramBot.sendChatAction(chatId, "typing");

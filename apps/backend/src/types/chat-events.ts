@@ -3,6 +3,7 @@ export type ConversationMode = "ai" | "human";
 export type ConversationSummary = {
   id: string;
   channel: string;
+  displayLabel?: string;
   sessionId: string;
   userId?: string | null;
   profileId?: string | null;
@@ -23,5 +24,6 @@ export type ConversationMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
+  channel?: string;
   metadata?: Record<string, unknown>;
 };

@@ -1,3 +1,5 @@
+import { getAuthToken, getAuthUser } from "./auth";
+
 export type ChatMessage = {
   id?: string;
   role: "user" | "assistant";
@@ -7,9 +9,23 @@ export type ChatMessage = {
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-export async function loadHistory(sessionId: string): Promise<ChatMessage[]> {
-  const response = await fetch(`${apiBase}/api/chat/history/${sessionId}`, {
-    cache: "no-store"
+function authHeaders(token: string): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`
+  };
+}
+
+export async function loadHistory(): Promise<ChatMessage[]> {
+  const token = getAuthToken();
+  if (!token) {
+    return [];
+  }
+  const response = await fetch(`${apiBase}/api/chat/secure/history`, {
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
   });
 
   if (!response.ok) {
@@ -24,12 +40,20 @@ export async function sendMessage(input: {
   sessionId: string;
   text: string;
 }): Promise<ChatMessage> {
-  const response = await fetch(`${apiBase}/api/chat/message`, {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("Please sign in to use chat.");
+  }
+  const authUser = getAuthUser();
+  const endpoint = "/api/chat/secure/message";
+
+  const response = await fetch(`${apiBase}${endpoint}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(input)
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      ...input,
+      userId: authUser?.id
+    })
   });
 
   if (!response.ok) {

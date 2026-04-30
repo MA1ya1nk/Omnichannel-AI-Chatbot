@@ -5,6 +5,7 @@ import type { ConversationMessage, ConversationSummary } from "../types/chat-eve
 function toConversationSummary(input: {
   id: string;
   channel: string;
+  displayLabel?: string;
   sessionId: string;
   userId: string | null;
   profileId: string | null;
@@ -16,6 +17,7 @@ function toConversationSummary(input: {
   return {
     id: input.id,
     channel: input.channel,
+    displayLabel: input.displayLabel,
     sessionId: input.sessionId,
     userId: input.userId,
     profileId: input.profileId,
@@ -32,10 +34,35 @@ function toConversationSummary(input: {
   };
 }
 
+function deriveDisplayLabel(input: {
+  profileDisplayName?: string | null;
+  profileCanonicalKey?: string | null;
+  userId?: string | null;
+  sessionId: string;
+  channel: string;
+}) {
+  if (input.profileDisplayName?.trim()) {
+    return input.profileDisplayName.trim();
+  }
+  if (input.profileCanonicalKey?.trim()) {
+    return input.profileCanonicalKey.trim();
+  }
+  if (input.userId?.trim()) {
+    return input.userId.trim();
+  }
+  return `${input.channel} user`;
+}
+
 export async function getConversationSummaries(): Promise<ConversationSummary[]> {
   const conversations = await prisma.conversation.findMany({
     orderBy: { updatedAt: "desc" },
     include: {
+      profile: {
+        select: {
+          displayName: true,
+          canonicalKey: true
+        }
+      },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1
@@ -61,6 +88,13 @@ export async function getConversationSummaries(): Promise<ConversationSummary[]>
       ...toConversationSummary({
         id: key,
         channel: hasMultipleChannels ? "multi" : primary.channel,
+        displayLabel: deriveDisplayLabel({
+          profileDisplayName: primary.profile?.displayName,
+          profileCanonicalKey: primary.profile?.canonicalKey,
+          userId: primary.userId,
+          sessionId: primary.sessionId,
+          channel: primary.channel
+        }),
         sessionId: primary.profileId ? `profile:${primary.profileId}` : primary.sessionId,
         userId: primary.userId,
         profileId: primary.profileId,
@@ -92,6 +126,13 @@ export async function getConversationMessages(inboxId: string): Promise<Conversa
 
   const messages = await prisma.message.findMany({
     where,
+    include: {
+      conversation: {
+        select: {
+          channel: true
+        }
+      }
+    },
     orderBy: { createdAt: "asc" }
   });
 
@@ -100,6 +141,7 @@ export async function getConversationMessages(inboxId: string): Promise<Conversa
     role: message.role,
     content: message.content,
     createdAt: message.createdAt.toISOString(),
+    channel: message.conversation.channel,
     metadata: message.metadata as Record<string, unknown> | undefined
   }));
 }
@@ -108,6 +150,12 @@ export async function getConversationSummaryById(conversationId: string): Promis
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: {
+      profile: {
+        select: {
+          displayName: true,
+          canonicalKey: true
+        }
+      },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1
@@ -122,6 +170,13 @@ export async function getConversationSummaryById(conversationId: string): Promis
   return toConversationSummary({
     id: conversation.id,
     channel: conversation.channel,
+    displayLabel: deriveDisplayLabel({
+      profileDisplayName: conversation.profile?.displayName,
+      profileCanonicalKey: conversation.profile?.canonicalKey,
+      userId: conversation.userId,
+      sessionId: conversation.sessionId,
+      channel: conversation.channel
+    }),
     sessionId: conversation.sessionId,
     userId: conversation.userId,
     profileId: conversation.profileId,
@@ -175,6 +230,7 @@ export async function addConversationMessage(input: {
   conversationId: string;
   role: MessageRole;
   content: string;
+  channel?: string;
   metadata?: Prisma.InputJsonValue;
 }) {
   const message = await prisma.message.create({
@@ -191,6 +247,7 @@ export async function addConversationMessage(input: {
     role: message.role,
     content: message.content,
     createdAt: message.createdAt.toISOString(),
+    channel: input.channel,
     metadata: message.metadata as Record<string, unknown> | undefined
   } as ConversationMessage;
 }

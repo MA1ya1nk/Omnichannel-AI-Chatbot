@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart, BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import { getAnalytics, type AdminAnalytics } from "../../../lib/admin-api";
+import { getAuthUser } from "../../../lib/auth";
 
 const PIE_COLORS = ["#06b6d4", "#8b5cf6", "#22c55e", "#f59e0b", "#ef4444"];
+const ALLOWED_ADMIN_EMAIL = "mk20040307@gmail.com";
 
 function heatColor(value: number, max: number) {
   if (max <= 0) {
@@ -16,10 +20,18 @@ function heatColor(value: number, max: number) {
 }
 
 export default function AdminAnalyticsPage() {
+  const router = useRouter();
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const authUser = getAuthUser();
+    const isAdmin = authUser?.email?.toLowerCase() === ALLOWED_ADMIN_EMAIL;
+    if (!isAdmin) {
+      router.replace("/");
+      return;
+    }
+
     getAnalytics()
       .then((data) => {
         setAnalytics(data);
@@ -28,7 +40,7 @@ export default function AdminAnalyticsPage() {
       .catch((reason) => {
         setError(reason instanceof Error ? reason.message : "Failed to load analytics.");
       });
-  }, []);
+  }, [router]);
 
   const maxHourCount = useMemo(
     () => Math.max(...(analytics?.peakHours.map((item) => item.count) ?? [0])),
@@ -36,19 +48,26 @@ export default function AdminAnalyticsPage() {
   );
 
   return (
-    <main className="min-h-screen p-4 md:p-8">
-      <section className="glass mx-auto w-full max-w-7xl rounded-3xl p-6 shadow-glass">
-        <h1 className="mb-2 text-2xl font-semibold text-cyan-200">Analytics Dashboard</h1>
-        <p className="mb-6 text-sm text-slate-400">Messages per channel, peak hours heatmap, and response latency.</p>
+    <main className="min-h-screen p-3 sm:p-4 md:p-8">
+      <section className="glass neon-ring mx-auto w-full max-w-7xl rounded-3xl p-4 shadow-glass sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h1 className="mb-1 text-xl font-semibold text-cyan-200 sm:text-2xl">Analytics Dashboard</h1>
+            <p className="text-sm text-slate-400">Messages per channel, peak hours heatmap, and response latency.</p>
+          </div>
+          <Link href="/admin" className="text-xs text-cyan-300 hover:text-cyan-100">
+            Back to Inbox
+          </Link>
+        </div>
 
         {error && <div className="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>}
         {!analytics && !error && <p className="text-sm text-slate-400">Loading analytics...</p>}
 
         {analytics && (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-700/60 bg-slate-950/40 p-4">
               <h2 className="mb-3 text-sm font-medium text-cyan-200">Messages Per Channel</h2>
-              <div className="h-72">
+              <div className="h-64 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={analytics.channelBreakdown} dataKey="count" nameKey="channel" outerRadius={90} label>
@@ -64,13 +83,13 @@ export default function AdminAnalyticsPage() {
 
             <div className="rounded-2xl border border-slate-700/60 bg-slate-950/40 p-4">
               <h2 className="mb-3 text-sm font-medium text-cyan-200">Average Response Time</h2>
-              <p className="text-4xl font-semibold text-slate-100">{Math.round(analytics.averageResponseMs / 1000)}s</p>
+              <p className="text-3xl font-semibold text-slate-100 sm:text-4xl">{Math.round(analytics.averageResponseMs / 1000)}s</p>
               <p className="mt-2 text-xs text-slate-400">Calculated as average delay from user message to assistant reply.</p>
             </div>
 
             <div className="rounded-2xl border border-slate-700/60 bg-slate-950/40 p-4 md:col-span-2">
               <h2 className="mb-3 text-sm font-medium text-cyan-200">Peak Hours Heatmap</h2>
-              <div className="h-72">
+              <div className="h-64 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={analytics.peakHours}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" />

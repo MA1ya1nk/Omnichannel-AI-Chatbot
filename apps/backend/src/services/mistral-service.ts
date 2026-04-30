@@ -14,6 +14,18 @@ type ChatRequest = {
   history: HistoryMessage[];
 };
 
+function cleanAssistantText(text: string): string {
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/`/g, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 const apiKey = env.MISTRAL_API_KEY;
 const model = env.MISTRAL_MODEL;
 
@@ -57,7 +69,9 @@ async function responseNode(state: typeof GraphState.State) {
     "- For simple questions, answer in 1-4 lines.",
     "- For structured requests, use short bullet points with no filler.",
     "- If information is missing, ask one short clarifying question.",
-    "- Keep tone professional and direct."
+    "- Keep tone professional and direct.",
+    "- Do not use markdown formatting characters like *, #, _, or ` unless explicitly requested.",
+    "- Prefer plain, clean text output."
   ].join("\n");
 
   const systemPrompt = state.context
@@ -88,8 +102,9 @@ async function responseNode(state: typeof GraphState.State) {
           .join("\n")
           .trim();
 
+  const cleaned = cleanAssistantText(assistantText || "");
   return {
-    assistantText: assistantText || "I could not generate a response right now. Please try again."
+    assistantText: cleaned || "I could not generate a response right now. Please try again."
   };
 }
 

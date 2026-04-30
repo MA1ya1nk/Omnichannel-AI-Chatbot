@@ -2,10 +2,13 @@
 
 import {
   AlertCircle,
+  ArrowLeft,
   Bot,
+  Globe,
   MessageSquare,
   SendHorizontal,
-  Smartphone,
+  Send,
+  Slack,
   ToggleLeft,
   ToggleRight,
   Webhook
@@ -30,9 +33,31 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 function channelIcon(channel: string) {
   if (channel === "multi") return <Bot className="h-4 w-4 text-indigo-300" />;
-  if (channel === "telegram") return <Smartphone className="h-4 w-4 text-sky-300" />;
-  if (channel === "slack") return <Webhook className="h-4 w-4 text-violet-300" />;
+  if (channel === "telegram") return <Send className="h-4 w-4 text-sky-300" />;
+  if (channel === "slack") return <Slack className="h-4 w-4 text-violet-300" />;
+  if (channel === "web") return <Globe className="h-4 w-4 text-cyan-300" />;
+  if (channel === "webhook") return <Webhook className="h-4 w-4 text-cyan-300" />;
   return <MessageSquare className="h-4 w-4 text-cyan-300" />;
+}
+
+function conversationLabel(conversation: AdminConversation) {
+  if (conversation.displayLabel?.trim()) {
+    return conversation.displayLabel.trim();
+  }
+
+  if (conversation.channel !== "multi") {
+    return conversation.channel.toUpperCase();
+  }
+
+  if (conversation.profileId) {
+    return `USER ${conversation.profileId.slice(0, 8)}`;
+  }
+
+  if (conversation.userId) {
+    return `USER ${conversation.userId.slice(0, 8)}`;
+  }
+
+  return "LINKED USER";
 }
 
 function modeBadge(mode: "ai" | "human") {
@@ -74,7 +99,11 @@ export function AdminDashboard() {
 
   useEffect(() => {
     if (!messagesContainerRef.current) return;
-    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    const container = messagesContainerRef.current;
+    const frame = requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
   }, [messages, selectedId]);
 
   useEffect(() => {
@@ -133,15 +162,22 @@ export function AdminDashboard() {
   }
 
   return (
-    <main className="h-screen overflow-hidden p-4 md:p-8">
-      <section className="glass mx-auto grid h-full w-full max-w-7xl gap-4 rounded-3xl p-4 shadow-glass md:grid-cols-[320px_1fr] md:p-6">
+    <main className="h-screen overflow-hidden p-3 sm:p-4 md:p-8">
+      <section className="glass neon-ring mx-auto grid h-full w-full max-w-7xl grid-rows-[minmax(220px,35%)_minmax(0,1fr)] gap-4 rounded-3xl p-3 shadow-glass sm:p-4 md:grid-cols-[320px_1fr] md:grid-rows-1 md:p-6">
         <aside className="flex min-h-0 flex-col rounded-2xl border border-slate-700/60 bg-slate-950/30 p-3">
           <div className="mb-3 flex items-center gap-2 text-cyan-200">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-700/70 px-2 py-1 text-[11px] text-cyan-300 hover:border-cyan-400/80 hover:text-cyan-100"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </Link>
             <Bot className="h-5 w-5" />
             <h1 className="text-base font-semibold">Unified Inbox</h1>
-            <Link href="/admin/analytics" className="ml-auto text-xs text-cyan-300 hover:text-cyan-100">
-              View Analytics
-            </Link>
+            <span className="ml-auto max-w-[120px] truncate text-[11px] text-slate-300" title={selectedConversation?.displayLabel}>
+              {selectedConversation?.displayLabel ?? "No user selected"}
+            </span>
           </div>
           <div className="mb-3 rounded-xl border border-slate-700/60 bg-slate-900/40 p-2">
             <p className="mb-2 text-[11px] font-medium text-cyan-200">Knowledge Base (PDF)</p>
@@ -170,7 +206,7 @@ export function AdminDashboard() {
                 <div className="mb-1 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {channelIcon(conversation.channel)}
-                    <span className="text-xs uppercase text-slate-300">{conversation.channel}</span>
+                    <span className="text-xs uppercase text-slate-300">{conversationLabel(conversation)}</span>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] ${modeBadge(conversation.mode)}`}>
                     {conversation.mode.toUpperCase()}
@@ -188,11 +224,9 @@ export function AdminDashboard() {
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/60 p-4">
             <div>
               <p className="text-sm text-slate-400">Conversation View</p>
-              <h2 className="text-base font-semibold text-slate-100">
+              <h2 className="text-sm font-semibold text-slate-100 sm:text-base">
                 {selectedConversation
-                  ? selectedConversation.profileId
-                    ? `Unified inbox: ${selectedConversation.profileId}`
-                    : selectedConversation.sessionId
+                  ? `Unified inbox: ${selectedConversation.displayLabel ?? conversationLabel(selectedConversation)}`
                   : "Select a conversation"}
               </h2>
             </div>
@@ -220,18 +254,18 @@ export function AdminDashboard() {
             <div className="border-b border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">{error}</div>
           )}
 
-          <div ref={messagesContainerRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+          <div ref={messagesContainerRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
+                className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm sm:max-w-[85%] sm:px-4 ${
                   message.role === "user"
                     ? "mr-auto bg-slate-800/90 text-slate-100"
                     : "ml-auto bg-cyan-500/20 text-cyan-100"
                 }`}
               >
                 <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-400">
-                  {channelIcon(selectedConversation?.channel ?? "web")}
+                  {channelIcon(message.channel ?? selectedConversation?.channel ?? "web")}
                   <span>{message.role}</span>
                 </div>
                 {message.content}
@@ -239,7 +273,7 @@ export function AdminDashboard() {
             ))}
           </div>
 
-          <div className="border-t border-slate-700/60 p-4">
+          <div className="border-t border-slate-700/60 p-3 sm:p-4">
             <div className="mb-2 flex flex-wrap gap-2">
               {cannedResponses.map((response) => (
                 <button

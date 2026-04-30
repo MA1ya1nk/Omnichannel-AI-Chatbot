@@ -138,6 +138,7 @@ router.post("/conversations/:conversationId/reply", async (req, res, next) => {
       conversationId: conversation.id,
       role: MessageRole.assistant,
       content: payload.text,
+      channel: conversation.channel,
       metadata: {
         source: "admin",
         mode: "human"
@@ -164,7 +165,13 @@ router.post("/conversations/:conversationId/reply", async (req, res, next) => {
     if (summary) {
       emitConversationUpdated(summary);
     }
-    emitConversationMessage({ conversationId: inboxId, message: pendingMessage });
+    emitConversationMessage({
+      conversationId: inboxId,
+      message: {
+        ...pendingMessage,
+        channel: conversation.channel
+      }
+    });
 
     return res.json({ message: pendingMessage });
   } catch (error) {
@@ -317,16 +324,6 @@ router.post("/knowledge/upload", upload.single("file"), async (req, res, next) =
 
 router.get("/analytics", async (_req, res, next) => {
   try {
-    const channelBreakdownRows = await prisma.conversation.groupBy({
-      by: ["channel"],
-      _count: { channel: true }
-    });
-
-    const channelBreakdown = channelBreakdownRows.map((row: { channel: string; _count: { channel: number } }) => ({
-      channel: row.channel,
-      count: row._count.channel
-    }));
-
     const messages = await prisma.message.findMany({
       include: {
         conversation: {
@@ -340,11 +337,17 @@ router.get("/analytics", async (_req, res, next) => {
       }
     });
 
+    const channelBreakdownMap = new Map<string, number>();
     const peakHours = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
     const responseTimes: number[] = [];
 
     let pendingUserMessageAt: Date | null = null;
     for (const message of messages) {
+      if (message.role === "user") {
+        const channel = message.conversation.channel;
+        channelBreakdownMap.set(channel, (channelBreakdownMap.get(channel) ?? 0) + 1);
+      }
+
       const hour = message.createdAt.getHours();
       peakHours[hour].count += 1;
 
@@ -360,6 +363,11 @@ router.get("/analytics", async (_req, res, next) => {
       responseTimes.length > 0
         ? Math.round(responseTimes.reduce((total, item) => total + item, 0) / responseTimes.length)
         : 0;
+
+    const channelBreakdown = Array.from(channelBreakdownMap.entries()).map(([channel, count]) => ({
+      channel,
+      count
+    }));
 
     return res.json({
       channelBreakdown,

@@ -87,6 +87,7 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
         role: userMessage.role,
         content: userMessage.content,
         createdAt: userMessage.createdAt.toISOString(),
+        channel: conversation.channel,
         metadata: userMessage.metadata as Record<string, unknown> | undefined
       }
     });
@@ -159,6 +160,7 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
         role: assistantMessage.role,
         content: assistantMessage.content,
         createdAt: assistantMessage.createdAt.toISOString(),
+        channel: conversation.channel,
         metadata: assistantMessage.metadata as Record<string, unknown> | undefined
       }
     });
