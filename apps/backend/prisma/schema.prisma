@@ -8,13 +8,17 @@ datasource db {
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  channel   String
-  userId    String?
-  sessionId String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
+  id             String            @id @default(cuid())
+  channel        String
+  userId         String?
+  sessionId      String
+  mode           ConversationMode  @default(ai)
+  profileId      String?
+  channelAddress Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  messages       Message[]
+  profile        UserProfile?      @relation(fields: [profileId], references: [id], onDelete: SetNull)
 
   @@index([sessionId, channel])
 }
@@ -31,8 +35,72 @@ model Message {
   @@index([conversationId, createdAt])
 }
 
+model UserProfile {
+  id             String            @id @default(cuid())
+  displayName    String?
+  canonicalKey   String?           @unique
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  identities     ChannelIdentity[]
+  conversations  Conversation[]
+}
+
+model ChannelIdentity {
+  id               String      @id @default(cuid())
+  profileId        String
+  channel          String
+  externalUserId   String
+  createdAt        DateTime    @default(now())
+  profile          UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([channel, externalUserId])
+  @@index([profileId])
+}
+
+model CannedResponse {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  action         String
+  conversationId String?
+  detail         Json?
+  createdAt      DateTime @default(now())
+}
+
+model KnowledgeDocument {
+  id         String           @id @default(cuid())
+  title      String
+  mimeType   String
+  source     String?
+  uploadedBy String?
+  createdAt  DateTime         @default(now())
+  chunks     KnowledgeChunk[]
+}
+
+model KnowledgeChunk {
+  id         String            @id @default(cuid())
+  documentId String
+  content    String
+  embedding  Json
+  createdAt  DateTime          @default(now())
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
 enum MessageRole {
   user
   assistant
   system
+}
+
+enum ConversationMode {
+  ai
+  human
 }

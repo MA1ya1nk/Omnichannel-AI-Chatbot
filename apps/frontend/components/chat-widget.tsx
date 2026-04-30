@@ -3,6 +3,7 @@
 import { MessageCircle, SendHorizontal, X } from "lucide-react";
 import DOMPurify from "dompurify";
 import { useEffect, useMemo, useState } from "react";
+import { io } from "socket.io-client";
 import { Button } from "./ui/button";
 import { loadHistory, sendMessage, type ChatMessage } from "../lib/chat-api";
 
@@ -15,6 +16,7 @@ function getSessionId(): string {
 }
 
 export function ChatWidget() {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
   const [isOpen, setIsOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -26,6 +28,26 @@ export function ChatWidget() {
     setSessionId(id);
     loadHistory(id).then(setMessages).catch(() => setMessages([]));
   }, []);
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+    const socket = io(apiBase, { transports: ["websocket"] });
+    socket.emit("web:join", { sessionId });
+    socket.on("web:message", (message: ChatMessage) => {
+      setMessages((previous) => {
+        const alreadyExists = previous.some((item) => item.id && message.id && item.id === message.id);
+        if (alreadyExists) {
+          return previous;
+        }
+        return [...previous, message];
+      });
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [apiBase, sessionId]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
 

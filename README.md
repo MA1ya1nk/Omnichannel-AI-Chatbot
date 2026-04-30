@@ -1,18 +1,22 @@
-# Omnichannel AI Chatbot - Phase 1 and 2
+# Omnichannel AI Chatbot - Phase 1 to 4
 
-Phase 1 and 2 deliver the unified AI brain for web + messaging channels:
+Unified AI support platform across web + messaging channels:
 - Express + TypeScript backend
-- Mistral service layer + message normalization layer
-- Next.js 14 dark-themed web chat widget
-- PostgreSQL persistence through Prisma
-- Telegram webhook integration
-- Slack Bolt event webhook integration
-- Channel response renderer (Telegram Inline Keyboard + Slack Block Kit)
+- LangGraph orchestration + Mistral generation
+- Next.js 14 frontend (web widget + admin inbox + analytics)
+- PostgreSQL + Prisma persistence
+- Telegram Bot API and Slack Bolt integration
+- Channel-specific rendering (web HTML, Telegram inline keyboard, Slack Block Kit)
+- Identity linking across channels
+- Knowledge Base ingestion (PDF) + retrieval context (RAG-lite)
+- Human takeover mode + canned responses
+- Real-time unified admin inbox (Socket.io)
+- Analytics API + Recharts dashboard
 
 ## Project Structure
 
 - `apps/backend`: API, normalization, Mistral service, Prisma, Telegram/Slack webhooks
-- `apps/frontend`: Dashboard + web chat widget
+- `apps/frontend`: Web chat widget + admin inbox + analytics
 
 ## Setup
 
@@ -30,11 +34,14 @@ Phase 1 and 2 deliver the unified AI brain for web + messaging channels:
 
 Frontend: `http://localhost:3000`  
 Backend health: `http://localhost:4000/health`
+Admin dashboard: `http://localhost:3000/admin`
+Analytics dashboard: `http://localhost:3000/admin/analytics`
 
 ## Webhooks
 
 - Telegram webhook endpoint: `POST /webhooks/telegram`
 - Slack webhook endpoint (Bolt): `POST /webhooks/slack`
+- WhatsApp endpoint can be added using `WHATSAPP_*` env variables (mock renderer currently supported in service layer)
 
 ## ngrok Local Testing
 
@@ -62,6 +69,73 @@ Backend health: `http://localhost:4000/health`
    - `message.channels`
    - `message.im`
 4. Reinstall app to workspace, then send a message where bot is present.
+
+### Optional WhatsApp (Cloud API) setup notes
+
+1. Set:
+   - `WHATSAPP_ACCESS_TOKEN`
+   - `WHATSAPP_VERIFY_TOKEN`
+   - `WHATSAPP_PHONE_NUMBER_ID`
+2. Configure Meta webhook callback URL to your backend (via ngrok).
+3. Verify and subscribe message events.
+
+## Phase 3 - Admin Dashboard
+
+- Open `http://localhost:3000/admin` to access Unified Inbox.
+- New incoming Telegram/Slack/Web messages appear in real time using Socket.io.
+- Use the `Human Mode` toggle:
+  - `OFF` (AI mode): Mistral auto-replies
+  - `ON` (Human mode): AI response is interrupted, waiting for admin manual reply
+- Use canned responses chips for fast manual replies.
+- Manual admin reply is dispatched to the original channel (Telegram/Slack/Web context).
+- Admin API requests require `x-admin-token` and support rate limiting.
+- Manual admin replies are restricted to Human Mode.
+
+## Phase 4 - Identity Linking, RAG, Analytics
+
+- User link endpoint: `POST /api/users/link`
+  - Example:
+    - `{ "email": "user@example.com", "links": [{ "channel": "telegram", "externalUserId": "123" }] }`
+- Admin knowledge upload endpoint: `POST /api/admin/knowledge/upload`
+  - Multipart form-data with `file` (PDF).
+- Analytics endpoint: `GET /api/admin/analytics`
+  - Returns channel counts, hourly volume, and average response time.
+- Once a knowledge document is uploaded, chat responses automatically include retrieval context when relevant.
+
+## Cross-channel Continuity
+
+- Use `POST /api/admin/identity-links` to map multiple channel identities to one canonical profile.
+- Once linked, AI context fetches recent profile-level history across channels (web/telegram/slack).
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  U1[Web User] --> W[Web Widget]
+  U2[Telegram User] --> T[Telegram Bot API]
+  U3[Slack User] --> S[Slack Bolt]
+  W --> B[Express Backend]
+  T --> B
+  S --> B
+
+  B --> N[Message Normalizer]
+  N --> I[Identity Resolver]
+  I --> P[(PostgreSQL / Prisma)]
+
+  B --> G[LangGraph + Mistral]
+  B --> K[Knowledge Retriever]
+  K --> P
+  G --> P
+
+  B --> R[Response Renderer]
+  R --> W
+  R --> T
+  R --> S
+
+  B --> A[Admin APIs + Socket.io]
+  A --> D[Admin Inbox UI]
+  A --> X[Analytics Dashboard]
+```
 
 ## Notes
 

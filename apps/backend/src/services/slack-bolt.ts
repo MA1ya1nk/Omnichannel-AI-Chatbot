@@ -32,16 +32,10 @@ if (isSlackConfigured) {
       }
     }
 
-    const eventUser = "user" in event && typeof event.user === "string" ? event.user : undefined;
-    if (eventUser) {
-      await client.chat.postEphemeral({
-        channel: event.channel,
-        user: eventUser,
-        text: "Omnichannel AI is typing..."
-      });
-    }
-
     const result = await processInboundMessage(normalized);
+    if (result.interruptedForHuman || !result.assistantText) {
+      return;
+    }
     const rendered = renderSlackResponse(result.assistantText);
 
     await client.chat.postMessage({

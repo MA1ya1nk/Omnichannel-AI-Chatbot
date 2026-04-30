@@ -42,6 +42,9 @@ router.post("/telegram", async (req, res, next) => {
     }
 
     const result = await processInboundMessage(normalized);
+    if (result.interruptedForHuman || !result.assistantText) {
+      return res.status(200).json({ status: "human_mode_enabled", conversationId: result.conversationId });
+    }
     const rendered = renderTelegramResponse(result.assistantText);
 
     const chatId = normalized.metadata?.chatId;

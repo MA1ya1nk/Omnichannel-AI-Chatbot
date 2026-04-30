@@ -2,11 +2,28 @@ import { MessageRole, Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { generateAssistantReply } from "./mistral-service.js";
 import { type NormalizedMessage } from "./message-normalizer.js";
+import { emitConversationMessage, emitConversationUpdated, emitWebConversationMessage } from "./socket-server.js";
+import { getInboxSummaryByConversationId } from "./conversation-service.js";
+import { resolveProfileId } from "./identity-service.js";
+import { isConversationInterrupted, interruptConversation, resumeConversation } from "./langgraph-interrupt.js";
+
+function extractEmailFromMessage(text: string): string | null {
+  const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0].toLowerCase() : null;
+}
 
 export async function processInboundMessage(normalized: NormalizedMessage): Promise<{
   conversationId: string;
-  assistantText: string;
+  assistantText?: string;
+  interruptedForHuman: boolean;
 }> {
+  const emailFromMessage = extractEmailFromMessage(normalized.text);
+  const profileId = await resolveProfileId({
+    channel: normalized.channel,
+    externalUserId: normalized.userId,
+    canonicalIdentityKey: emailFromMessage ?? normalized.identityKey
+  });
+
   let conversation = await prisma.conversation.findFirst({
     where: {
       sessionId: normalized.sessionId,
@@ -19,8 +36,27 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
       data: {
         channel: normalized.channel,
         sessionId: normalized.sessionId,
-        userId: normalized.userId
+        userId: normalized.userId,
+        profileId,
+        channelAddress: normalized.channelAddress as Prisma.InputJsonValue | undefined
       }
+    });
+  } else if ((profileId && conversation.profileId !== profileId) || normalized.channelAddress) {
+    const updateData: Prisma.ConversationUpdateInput = {};
+    if (profileId && conversation.profileId !== profileId) {
+      updateData.profile = {
+        connect: {
+          id: profileId
+        }
+      };
+    }
+    if (normalized.channelAddress) {
+      updateData.channelAddress = normalized.channelAddress as Prisma.InputJsonValue;
+    }
+
+    conversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: updateData
     });
   }
 
@@ -33,10 +69,56 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
     }
   });
 
-  const history = await prisma.message.findMany({
+  const userMessage = await prisma.message.findFirst({
     where: { conversationId: conversation.id },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (userMessage) {
+    emitConversationMessage({
+      conversationId: conversation.profileId ?? conversation.id,
+      message: {
+        id: userMessage.id,
+        role: userMessage.role,
+        content: userMessage.content,
+        createdAt: userMessage.createdAt.toISOString(),
+        metadata: userMessage.metadata as Record<string, unknown> | undefined
+      }
+    });
+  }
+
+  const summaryAfterUserMessage = await getInboxSummaryByConversationId(conversation.id);
+  if (summaryAfterUserMessage) {
+    emitConversationUpdated(summaryAfterUserMessage);
+  }
+
+  if (conversation.mode === "human") {
+    interruptConversation(conversation.id);
+    return {
+      conversationId: conversation.id,
+      interruptedForHuman: true
+    };
+  }
+  resumeConversation(conversation.id);
+  if (isConversationInterrupted(conversation.id)) {
+    return {
+      conversationId: conversation.id,
+      interruptedForHuman: true
+    };
+  }
+
+  const historyWhere = conversation.profileId
+    ? {
+        conversation: {
+          profileId: conversation.profileId
+        }
+      }
+    : { conversationId: conversation.id };
+
+  const history = await prisma.message.findMany({
+    where: historyWhere,
     orderBy: { createdAt: "asc" },
-    take: 20
+    take: 40
   });
 
   const historyBeforeCurrentMessage = history
@@ -56,8 +138,41 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
     }
   });
 
+  const assistantMessage = await prisma.message.findFirst({
+    where: { conversationId: conversation.id, role: MessageRole.assistant },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (assistantMessage) {
+    emitConversationMessage({
+      conversationId: conversation.profileId ?? conversation.id,
+      message: {
+        id: assistantMessage.id,
+        role: assistantMessage.role,
+        content: assistantMessage.content,
+        createdAt: assistantMessage.createdAt.toISOString(),
+        metadata: assistantMessage.metadata as Record<string, unknown> | undefined
+      }
+    });
+    if (normalized.channel === "web") {
+      emitWebConversationMessage(normalized.sessionId, {
+        id: assistantMessage.id,
+        role: assistantMessage.role,
+        content: assistantMessage.content,
+        createdAt: assistantMessage.createdAt.toISOString(),
+        metadata: assistantMessage.metadata as Record<string, unknown> | undefined
+      });
+    }
+  }
+
+  const summaryAfterAssistantMessage = await getInboxSummaryByConversationId(conversation.id);
+  if (summaryAfterAssistantMessage) {
+    emitConversationUpdated(summaryAfterAssistantMessage);
+  }
+
   return {
     conversationId: conversation.id,
-    assistantText
+    assistantText,
+    interruptedForHuman: false
   };
 }

@@ -9,6 +9,7 @@ const router = Router();
 const requestSchema = z.object({
   sessionId: z.string().min(1),
   userId: z.string().optional(),
+  identityKey: z.string().optional(),
   text: z.string().min(1),
   type: z.enum(["text"]).optional(),
   metadata: z.record(z.unknown()).optional()
@@ -21,11 +22,23 @@ router.post("/message", async (req, res, next) => {
 
     const result = await processInboundMessage(normalized);
 
-    res.json({
+    if (result.interruptedForHuman) {
+      return res.json({
+        conversationId: result.conversationId,
+        message: {
+          role: "assistant",
+          content: "A human agent has joined this conversation and will reply shortly.",
+          createdAt: new Date().toISOString()
+        },
+        interruptedForHuman: true
+      });
+    }
+
+    return res.json({
       conversationId: result.conversationId,
       message: {
         role: "assistant",
-        content: result.assistantText,
+        content: result.assistantText ?? "",
         createdAt: new Date().toISOString()
       }
     });

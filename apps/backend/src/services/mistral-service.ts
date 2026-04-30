@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { env } from "../env.js";
+import { retrieveKnowledgeContext } from "./knowledge-base.js";
 
 type HistoryMessage = {
   role: "user" | "assistant" | "system";
@@ -33,8 +34,12 @@ const GraphState = Annotation.Root({
   assistantText: Annotation<string>
 });
 
-async function retrieveContext(_query: string): Promise<string | null> {
-  return null;
+async function retrieveContext(query: string): Promise<string | null> {
+  try {
+    return await retrieveKnowledgeContext(query);
+  } catch {
+    return null;
+  }
 }
 
 async function contextNode(state: typeof GraphState.State) {

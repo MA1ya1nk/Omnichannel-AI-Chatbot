@@ -3,6 +3,7 @@ import { z } from "zod";
 const webMessageSchema = z.object({
   sessionId: z.string().min(1),
   userId: z.string().optional(),
+  identityKey: z.string().optional(),
   text: z.string().min(1),
   type: z.enum(["text"]).default("text"),
   metadata: z.record(z.unknown()).optional()
@@ -12,10 +13,12 @@ export type NormalizedMessage = {
   channel: "web" | "telegram" | "slack";
   sessionId: string;
   userId?: string;
+  identityKey?: string;
   text: string;
   type: "text";
   timestamp: string;
   metadata?: Record<string, unknown>;
+  channelAddress?: Record<string, unknown>;
 };
 
 export function normalizeWebMessage(payload: unknown): NormalizedMessage {
@@ -25,10 +28,14 @@ export function normalizeWebMessage(payload: unknown): NormalizedMessage {
     channel: "web",
     sessionId: parsed.sessionId,
     userId: parsed.userId,
+    identityKey: parsed.identityKey ?? parsed.userId ?? parsed.sessionId,
     text: parsed.text.trim(),
     type: parsed.type,
     timestamp: new Date().toISOString(),
-    metadata: parsed.metadata
+    metadata: parsed.metadata,
+    channelAddress: {
+      sessionId: parsed.sessionId
+    }
   };
 }
 
@@ -59,14 +66,18 @@ export function normalizeTelegramMessage(payload: unknown): NormalizedMessage | 
 
   return {
     channel: "telegram",
-    sessionId: `telegram:${message.chat.id}`,
+    sessionId: message.from?.id ? `telegram-user:${message.from.id}` : `telegram-chat:${message.chat.id}`,
     userId: message.from?.id ? String(message.from.id) : undefined,
+    identityKey: message.from?.id ? `telegram-user:${message.from.id}` : `telegram-chat:${message.chat.id}`,
     text: message.text.trim(),
     type: "text",
     timestamp: new Date().toISOString(),
     metadata: {
       chatId: message.chat.id,
       messageId: message.message_id
+    },
+    channelAddress: {
+      chatId: message.chat.id
     }
   };
 }
@@ -94,14 +105,18 @@ export function normalizeSlackMessage(payload: unknown): NormalizedMessage | nul
 
   return {
     channel: "slack",
-    sessionId: `slack:${event.channel}`,
+    sessionId: event.user ? `slack-user:${event.user}` : `slack-channel:${event.channel}`,
     userId: event.user,
+    identityKey: event.user ? `slack-user:${event.user}` : `slack-channel:${event.channel}`,
     text: event.text.trim(),
     type: "text",
     timestamp: new Date().toISOString(),
     metadata: {
       channelId: event.channel,
       slackTs: event.ts
+    },
+    channelAddress: {
+      channelId: event.channel
     }
   };
 }
