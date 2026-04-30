@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import cors from "cors";
 import express from "express";
 import adminRouter from "./routes/admin.js";
+import authRouter from "./routes/auth.js";
 import chatRouter from "./routes/chat.js";
 import usersRouter from "./routes/users.js";
 import webhooksRouter from "./routes/webhooks.js";
@@ -26,6 +27,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/chat", chatRouter);
+app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/users", usersRouter);
 app.use("/webhooks", webhooksRouter);

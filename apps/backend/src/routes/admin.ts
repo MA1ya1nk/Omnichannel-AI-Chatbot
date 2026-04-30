@@ -3,6 +3,7 @@ import { Router } from "express";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import { z } from "zod";
+import { requireAuth } from "../middleware/auth.js";
 import { prisma } from "../prisma.js";
 import {
   addConversationMessage,
@@ -20,11 +21,22 @@ import { interruptConversation, resumeConversation } from "../services/langgraph
 import { emitConversationMessage, emitConversationUpdated } from "../services/socket-server.js";
 
 const router = Router();
+const ALLOWED_ADMIN_EMAIL = "mk20040307@gmail.com";
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024
   }
+});
+
+router.use(requireAuth);
+
+router.use((req, res, next) => {
+  const email = req.authUser?.email?.toLowerCase();
+  if (email !== ALLOWED_ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Forbidden: admin access is restricted." });
+  }
+  return next();
 });
 
 router.use((req, res, next) => {

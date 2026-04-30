@@ -7,28 +7,33 @@ import { getInboxSummaryByConversationId } from "./conversation-service.js";
 import { resolveProfileId } from "./identity-service.js";
 import { isConversationInterrupted, interruptConversation, resumeConversation } from "./langgraph-interrupt.js";
 
-function extractEmailFromMessage(text: string): string | null {
-  const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return match ? match[0].toLowerCase() : null;
-}
-
 export async function processInboundMessage(normalized: NormalizedMessage): Promise<{
   conversationId: string;
   assistantText?: string;
+  assistantMessageId?: string;
+  assistantCreatedAt?: string;
   interruptedForHuman: boolean;
 }> {
-  const emailFromMessage = extractEmailFromMessage(normalized.text);
   const profileId = await resolveProfileId({
     channel: normalized.channel,
     externalUserId: normalized.userId,
-    canonicalIdentityKey: emailFromMessage ?? normalized.identityKey
+    canonicalIdentityKey: normalized.identityKey
   });
 
+  const conversationWhere =
+    normalized.channel === "web" && normalized.userId
+      ? {
+          sessionId: normalized.sessionId,
+          channel: normalized.channel,
+          userId: normalized.userId
+        }
+      : {
+          sessionId: normalized.sessionId,
+          channel: normalized.channel
+        };
+
   let conversation = await prisma.conversation.findFirst({
-    where: {
-      sessionId: normalized.sessionId,
-      channel: normalized.channel
-    }
+    where: conversationWhere
   });
 
   if (!conversation) {
@@ -123,7 +128,10 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
 
   const historyBeforeCurrentMessage = history
     .slice(0, -1)
-    .map((message) => ({ role: message.role, content: message.content }));
+    .map((message: { role: "user" | "assistant" | "system"; content: string }) => ({
+      role: message.role,
+      content: message.content
+    }));
 
   const assistantText = await generateAssistantReply({
     userMessage: normalized.text,
@@ -173,6 +181,8 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
   return {
     conversationId: conversation.id,
     assistantText,
+    assistantMessageId: assistantMessage?.id,
+    assistantCreatedAt: assistantMessage?.createdAt.toISOString(),
     interruptedForHuman: false
   };
 }

@@ -43,6 +43,7 @@ model UserProfile {
   updatedAt      DateTime          @updatedAt
   identities     ChannelIdentity[]
   conversations  Conversation[]
+  authUsers      AppUser[]
 }
 
 model ChannelIdentity {
@@ -71,6 +72,32 @@ model AdminAuditLog {
   conversationId String?
   detail         Json?
   createdAt      DateTime @default(now())
+}
+
+model AppUser {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String?
+  profileId    String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  profile      UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  linkTokens   LinkToken[]
+}
+
+model LinkToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  channel   String
+  userId    String
+  metadata  Json?
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, channel])
 }
 
 model KnowledgeDocument {

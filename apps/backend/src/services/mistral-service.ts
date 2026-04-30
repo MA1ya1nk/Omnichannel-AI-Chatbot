@@ -48,9 +48,21 @@ async function contextNode(state: typeof GraphState.State) {
 }
 
 async function responseNode(state: typeof GraphState.State) {
+  const responsePolicy = [
+    "Response style requirements:",
+    "- Be precise and concise by default.",
+    "- Include only information directly relevant to the user request.",
+    "- Do not add generic suggestions or extra sections unless asked.",
+    "- If the user asks for a format (headings, bullets, table), follow it exactly.",
+    "- For simple questions, answer in 1-4 lines.",
+    "- For structured requests, use short bullet points with no filler.",
+    "- If information is missing, ask one short clarifying question.",
+    "- Keep tone professional and direct."
+  ].join("\n");
+
   const systemPrompt = state.context
-    ? `You are the unified AI brain for an omnichannel chatbot. Use this context when useful:\n${state.context}`
-    : "You are the unified AI brain for an omnichannel chatbot. Reply clearly and helpfully. You may use clean HTML for formatting when useful.";
+    ? `You are the unified AI brain for an omnichannel chatbot.\n${responsePolicy}\nUse this context when useful:\n${state.context}`
+    : `You are the unified AI brain for an omnichannel chatbot.\n${responsePolicy}\nUse clean HTML formatting only when useful and requested.`;
 
   const messageHistory = state.history.map((message) => {
     if (message.role === "assistant") {

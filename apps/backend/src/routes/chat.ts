@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { requireAuth } from "../middleware/auth.js";
 import { prisma } from "../prisma.js";
 import { normalizeWebMessage } from "../services/message-normalizer.js";
 import { processInboundMessage } from "../services/brain-engine.js";
@@ -15,13 +16,28 @@ const requestSchema = z.object({
   metadata: z.record(z.unknown()).optional()
 });
 
+function webSessionIdForUser(userId: string): string {
+  return `web-user:${userId}`;
+}
+
 router.post("/message", async (req, res, next) => {
+  return res.status(401).json({ error: "Authentication is required for chat messaging." });
+});
+
+router.post("/secure/message", requireAuth, async (req, res, next) => {
   try {
     requestSchema.parse(req.body);
-    const normalized = normalizeWebMessage(req.body);
+    if (!req.authUser) {
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+    const normalized = normalizeWebMessage({
+      ...req.body,
+      sessionId: webSessionIdForUser(req.authUser.userId),
+      userId: req.authUser.userId,
+      identityKey: req.authUser.email.toLowerCase()
+    });
 
     const result = await processInboundMessage(normalized);
-
     if (result.interruptedForHuman) {
       return res.json({
         conversationId: result.conversationId,
@@ -33,13 +49,13 @@ router.post("/message", async (req, res, next) => {
         interruptedForHuman: true
       });
     }
-
     return res.json({
       conversationId: result.conversationId,
       message: {
+        id: result.assistantMessageId,
         role: "assistant",
         content: result.assistantText ?? "",
-        createdAt: new Date().toISOString()
+        createdAt: result.assistantCreatedAt ?? new Date().toISOString()
       }
     });
   } catch (error) {
@@ -47,11 +63,22 @@ router.post("/message", async (req, res, next) => {
   }
 });
 
-router.get("/history/:sessionId", async (req, res, next) => {
+router.get("/history/:sessionId", (_req, res) => {
+  return res.status(401).json({ error: "Authentication is required for chat history." });
+});
+
+router.get("/secure/history", requireAuth, async (req, res, next) => {
   try {
-    const { sessionId } = req.params;
+    if (!req.authUser) {
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+    const sessionId = webSessionIdForUser(req.authUser.userId);
     const conversation = await prisma.conversation.findFirst({
-      where: { sessionId, channel: "web" },
+      where: {
+        channel: "web",
+        sessionId,
+        userId: req.authUser.userId
+      },
       include: {
         messages: {
           orderBy: { createdAt: "asc" }
