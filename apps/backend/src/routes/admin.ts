@@ -29,6 +29,31 @@ const upload = multer({
   }
 });
 
+async function applyModeForInbox(inboxConversation: { id: string; profileId: string | null }, mode: "ai" | "human") {
+  const where = inboxConversation.profileId ? { profileId: inboxConversation.profileId } : { id: inboxConversation.id };
+  const affected = await prisma.conversation.findMany({
+    where,
+    select: { id: true }
+  });
+
+  await prisma.conversation.updateMany({
+    where,
+    data: { mode }
+  });
+
+  for (const item of affected) {
+    if (mode === "human") {
+      interruptConversation(item.id);
+    } else {
+      resumeConversation(item.id);
+    }
+    const summary = await getInboxSummaryByConversationId(item.id);
+    if (summary) {
+      emitConversationUpdated(summary);
+    }
+  }
+}
+
 router.use(requireAuth);
 
 router.use((req, res, next) => {
@@ -85,16 +110,7 @@ router.patch("/conversations/:conversationId/mode", async (req, res, next) => {
     if (!primaryConversation) {
       return res.status(404).json({ error: "Conversation not found." });
     }
-    const conversation = await setConversationMode(primaryConversation.id, payload.mode);
-    if (!conversation) {
-      return res.status(404).json({ error: "Conversation not found." });
-    }
-
-    if (payload.mode === "human") {
-      interruptConversation(primaryConversation.id);
-    } else {
-      resumeConversation(primaryConversation.id);
-    }
+    await applyModeForInbox(primaryConversation, payload.mode);
 
     await prisma.adminAuditLog.create({
       data: {
@@ -105,9 +121,9 @@ router.patch("/conversations/:conversationId/mode", async (req, res, next) => {
     });
     const summary = await getInboxSummaryByConversationId(primaryConversation.id);
     if (summary) {
-      emitConversationUpdated(summary);
       return res.json({ conversation: summary });
     }
+    const conversation = await setConversationMode(primaryConversation.id, payload.mode);
     return res.json({ conversation });
   } catch (error) {
     next(error);
@@ -152,6 +168,8 @@ router.post("/conversations/:conversationId/reply", async (req, res, next) => {
       text: payload.text,
       persistedMessage: pendingMessage
     });
+
+    await applyModeForInbox(conversation, "ai");
 
     await prisma.adminAuditLog.create({
       data: {

@@ -10,6 +10,7 @@ import {
   Lock,
   LogIn,
   LogOut,
+  Menu,
   MessageSquareText,
   Settings,
   ShieldCheck,
@@ -119,7 +120,7 @@ export default function HomePage() {
           <span className="text-sm font-semibold sm:text-base">Omnichannel AI</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
           {hydrated && isAdminUser && (
             <a
               href="/admin"
@@ -166,6 +167,61 @@ export default function HomePage() {
             </>
           )}
         </div>
+
+        <details className="relative sm:hidden">
+          <summary className="list-none cursor-pointer rounded-lg border border-slate-600/80 px-2.5 py-1.5 text-slate-100 transition hover:border-cyan-400 hover:text-cyan-200">
+            <Menu className="h-4 w-4" />
+          </summary>
+          <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-700/80 bg-slate-900/95 p-2 shadow-glass">
+            <div className="flex flex-col gap-1.5 text-xs">
+              {hydrated && isAdminUser && (
+                <a
+                  href="/admin"
+                  className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-slate-100 transition hover:bg-slate-800/80"
+                >
+                  <ChartNoAxesCombined className="h-3.5 w-3.5" />
+                  Admin
+                </a>
+              )}
+              {hydrated && !authUser && (
+                <>
+                  <a
+                    href="/signin"
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-slate-100 transition hover:bg-slate-800/80"
+                  >
+                    <LogIn className="h-3.5 w-3.5" />
+                    Sign In
+                  </a>
+                  <a
+                    href="/signup"
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-slate-100 transition hover:bg-slate-800/80"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Create Account
+                  </a>
+                </>
+              )}
+              {hydrated && authUser && (
+                <>
+                  <a
+                    href="/widget"
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-slate-100 transition hover:bg-slate-800/80"
+                  >
+                    <MessageSquareText className="h-3.5 w-3.5" />
+                    Chat
+                  </a>
+                  <button
+                    onClick={handleLogout}
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-slate-100 transition hover:bg-slate-800/80"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign Out
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </details>
       </nav>
 
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-8">

@@ -13,6 +13,7 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
   assistantMessageId?: string;
   assistantCreatedAt?: string;
   interruptedForHuman: boolean;
+  humanSupportPendingMessage?: string;
 }> {
   const profileId = await resolveProfileId({
     channel: normalized.channel,
@@ -65,6 +66,52 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
     });
   }
 
+  let humanModeEnabled = conversation.mode === "human";
+  let modeUpdatedToHuman = false;
+  if (!humanModeEnabled && conversation.profileId) {
+    const humanConversation = await prisma.conversation.findFirst({
+      where: {
+        profileId: conversation.profileId,
+        mode: "human"
+      },
+      select: { id: true }
+    });
+    humanModeEnabled = Boolean(humanConversation);
+    if (humanModeEnabled) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { mode: "human" }
+      });
+      modeUpdatedToHuman = true;
+    }
+  }
+
+  if (modeUpdatedToHuman) {
+    const summaryAfterModeUpdate = await getInboxSummaryByConversationId(conversation.id);
+    if (summaryAfterModeUpdate) {
+      emitConversationUpdated(summaryAfterModeUpdate);
+    }
+  }
+
+  if (humanModeEnabled) {
+    interruptConversation(conversation.id);
+    return {
+      conversationId: conversation.id,
+      interruptedForHuman: true,
+      humanSupportPendingMessage:
+        "Your request is currently pending with human support. Please wait for the admin response, or tap Disable Human Support to resume AI assistance."
+    };
+  }
+  resumeConversation(conversation.id);
+  if (isConversationInterrupted(conversation.id)) {
+    return {
+      conversationId: conversation.id,
+      interruptedForHuman: true,
+      humanSupportPendingMessage:
+        "Your request is currently pending with human support. Please wait for the admin response, or tap Disable Human Support to resume AI assistance."
+    };
+  }
+
   await prisma.message.create({
     data: {
       conversationId: conversation.id,
@@ -96,21 +143,6 @@ export async function processInboundMessage(normalized: NormalizedMessage): Prom
   const summaryAfterUserMessage = await getInboxSummaryByConversationId(conversation.id);
   if (summaryAfterUserMessage) {
     emitConversationUpdated(summaryAfterUserMessage);
-  }
-
-  if (conversation.mode === "human") {
-    interruptConversation(conversation.id);
-    return {
-      conversationId: conversation.id,
-      interruptedForHuman: true
-    };
-  }
-  resumeConversation(conversation.id);
-  if (isConversationInterrupted(conversation.id)) {
-    return {
-      conversationId: conversation.id,
-      interruptedForHuman: true
-    };
   }
 
   const historyWhere = conversation.profileId

@@ -25,22 +25,32 @@ function safePreview(text: string): string {
   return text.length > 80 ? `${text.slice(0, 77)}...` : text;
 }
 
-export function renderTelegramResponse(aiText: string): TelegramRenderedResponse {
+export function renderTelegramResponse(
+  aiText: string,
+  options?: { showDisableHuman?: boolean }
+): TelegramRenderedResponse {
+  const showDisableHuman = options?.showDisableHuman ?? false;
   return {
     text: aiText,
     reply_markup: {
       inline_keyboard: [
-        [
-          { text: "Regenerate", callback_data: "regenerate_reply" },
-          { text: "Need Human", callback_data: "handoff_human" }
-        ],
-        [{ text: "Main Menu", callback_data: "main_menu" }]
+        showDisableHuman
+          ? [{ text: "Disable Human", callback_data: "disable_human_support" }]
+          : [
+              { text: "Regenerate", callback_data: "regenerate_reply" },
+              { text: "Need Human", callback_data: "handoff_human" }
+            ]
       ]
     }
   };
 }
 
-export function renderSlackResponse(aiText: string): SlackRenderedResponse {
+export function renderSlackResponse(
+  aiText: string,
+  options?: { showDisableHuman?: boolean; conversationId?: string }
+): SlackRenderedResponse {
+  const showDisableHuman = options?.showDisableHuman ?? false;
+  const conversationId = options?.conversationId ?? "";
   return {
     text: aiText,
     blocks: [
@@ -70,16 +80,29 @@ export function renderSlackResponse(aiText: string): SlackRenderedResponse {
       {
         type: "actions",
         elements: [
-          {
-            type: "button",
-            text: { type: "plain_text", text: "Regenerate" },
-            action_id: "regenerate_reply"
-          },
-          {
-            type: "button",
-            text: { type: "plain_text", text: "Human Support" },
-            action_id: "handoff_human"
-          }
+          ...(showDisableHuman
+            ? [
+                {
+                  type: "button",
+                  text: { type: "plain_text", text: "Disable Human" },
+                  action_id: "disable_human_support",
+                  value: conversationId
+                }
+              ]
+            : [
+                {
+                  type: "button",
+                  text: { type: "plain_text", text: "Regenerate" },
+                  action_id: "regenerate_reply",
+                  value: conversationId
+                },
+                {
+                  type: "button",
+                  text: { type: "plain_text", text: "Human Support" },
+                  action_id: "handoff_human",
+                  value: conversationId
+                }
+              ])
         ]
       }
     ]

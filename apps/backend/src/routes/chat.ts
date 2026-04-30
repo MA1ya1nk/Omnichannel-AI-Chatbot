@@ -43,7 +43,9 @@ router.post("/secure/message", requireAuth, async (req, res, next) => {
         conversationId: result.conversationId,
         message: {
           role: "assistant",
-          content: "A human agent has joined this conversation and will reply shortly.",
+          content:
+            result.humanSupportPendingMessage ??
+            "Your request is currently pending with human support. Please wait for the admin response, or enable AI mode again.",
           createdAt: new Date().toISOString()
         },
         interruptedForHuman: true
