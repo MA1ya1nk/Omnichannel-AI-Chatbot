@@ -159,6 +159,118 @@ router.post("/me/connect/slack/start", requireAuth, async (req, res, next) => {
   }
 });
 
+async function disconnectChannelForUser(input: { appUserId: string; channel: "telegram" | "slack" }) {
+  const appUser = await prisma.appUser.findUnique({
+    where: { id: input.appUserId },
+    select: { profileId: true }
+  });
+
+  if (!appUser) {
+    return { disconnected: false };
+  }
+
+  const identities = await prisma.channelIdentity.findMany({
+    where: {
+      profileId: appUser.profileId,
+      channel: input.channel
+    },
+    select: {
+      externalUserId: true
+    }
+  });
+
+  await prisma.channelIdentity.deleteMany({
+    where: {
+      profileId: appUser.profileId,
+      channel: input.channel
+    }
+  });
+
+  const externalIds = identities.map((identity) => identity.externalUserId);
+  const sessionIds =
+    input.channel === "slack"
+      ? externalIds.map((externalId) => `slack-user:${externalId}`)
+      : externalIds.map((externalId) => `telegram-user:${externalId}`);
+
+  if (externalIds.length > 0 || sessionIds.length > 0) {
+    await prisma.conversation.updateMany({
+      where: {
+        channel: input.channel,
+        profileId: appUser.profileId,
+        OR: [
+          ...(externalIds.length > 0
+            ? [
+                {
+                  userId: {
+                    in: externalIds
+                  }
+                }
+              ]
+            : []),
+          ...(sessionIds.length > 0
+            ? [
+                {
+                  sessionId: {
+                    in: sessionIds
+                  }
+                }
+              ]
+            : [])
+        ]
+      },
+      data: {
+        profileId: null
+      }
+    });
+  }
+
+  await prisma.linkToken.deleteMany({
+    where: {
+      userId: input.appUserId,
+      channel: input.channel,
+      usedAt: null
+    }
+  });
+
+  return { disconnected: true };
+}
+
+router.post("/me/disconnect/telegram", requireAuth, async (req, res, next) => {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+
+    await disconnectChannelForUser({
+      appUserId: authUser.userId,
+      channel: "telegram"
+    });
+
+    return res.json({ disconnected: true, channel: "telegram" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/me/disconnect/slack", requireAuth, async (req, res, next) => {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+
+    await disconnectChannelForUser({
+      appUserId: authUser.userId,
+      channel: "slack"
+    });
+
+    return res.json({ disconnected: true, channel: "slack" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/connect/slack/callback", async (req, res) => {
   const code = typeof req.query.code === "string" ? req.query.code : "";
   const state = typeof req.query.state === "string" ? req.query.state : "";

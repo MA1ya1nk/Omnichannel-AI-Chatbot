@@ -2,7 +2,13 @@
 
 import { CheckCircle2, Link2, Loader2, Smartphone, Webhook } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createSlackConnectLink, createTelegramConnectLink, getConnections } from "../lib/connections-api";
+import {
+  createSlackConnectLink,
+  createTelegramConnectLink,
+  disconnectSlack,
+  disconnectTelegram,
+  getConnections
+} from "../lib/connections-api";
 
 export function ChannelConnectCard() {
   const [connections, setConnections] = useState<{ web: boolean; telegram: boolean; slack: boolean } | null>(null);
@@ -19,6 +25,11 @@ export function ChannelConnectCard() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function refreshConnections() {
+    const data = await getConnections();
+    setConnections(data);
+  }
+
   async function onTelegramConnect() {
     try {
       setWorking("telegram");
@@ -31,6 +42,18 @@ export function ChannelConnectCard() {
     }
   }
 
+  async function onTelegramDisconnect() {
+    try {
+      setWorking("telegram");
+      await disconnectTelegram();
+      await refreshConnections();
+    } catch {
+      setError("Unable to disconnect Telegram.");
+    } finally {
+      setWorking("");
+    }
+  }
+
   async function onSlackConnect() {
     try {
       setWorking("slack");
@@ -38,6 +61,18 @@ export function ChannelConnectCard() {
       window.open(link, "_blank", "noopener,noreferrer");
     } catch {
       setError("Unable to start Slack connect flow.");
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function onSlackDisconnect() {
+    try {
+      setWorking("slack");
+      await disconnectSlack();
+      await refreshConnections();
+    } catch {
+      setError("Unable to disconnect Slack.");
     } finally {
       setWorking("");
     }
@@ -66,12 +101,16 @@ export function ChannelConnectCard() {
               {telegramConnected ? "Connected to your account." : "Not connected yet."}
             </p>
             <button
-              onClick={onTelegramConnect}
-              disabled={telegramConnected || working !== ""}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-100 disabled:opacity-60"
+              onClick={telegramConnected ? onTelegramDisconnect : onTelegramConnect}
+              disabled={working !== ""}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs disabled:opacity-60 ${
+                telegramConnected
+                  ? "border-rose-500/70 text-rose-200 hover:border-rose-400"
+                  : "border-slate-600 text-slate-100"
+              }`}
             >
               {working === "telegram" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-              {telegramConnected ? "Connected" : "Connect Telegram"}
+              {telegramConnected ? "Disconnect Telegram" : "Connect Telegram"}
             </button>
           </div>
 
@@ -82,12 +121,14 @@ export function ChannelConnectCard() {
             </div>
             <p className="mb-3 text-xs text-slate-400">{slackConnected ? "Connected to your account." : "Not connected yet."}</p>
             <button
-              onClick={onSlackConnect}
-              disabled={slackConnected || working !== ""}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-100 disabled:opacity-60"
+              onClick={slackConnected ? onSlackDisconnect : onSlackConnect}
+              disabled={working !== ""}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs disabled:opacity-60 ${
+                slackConnected ? "border-rose-500/70 text-rose-200 hover:border-rose-400" : "border-slate-600 text-slate-100"
+              }`}
             >
               {working === "slack" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-              {slackConnected ? "Connected" : "Connect Slack"}
+              {slackConnected ? "Disconnect Slack" : "Connect Slack"}
             </button>
           </div>
         </div>

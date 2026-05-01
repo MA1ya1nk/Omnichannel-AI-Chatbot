@@ -48,3 +48,23 @@ export async function createSlackConnectLink() {
   const data = await response.json();
   return data.authUrl as string;
 }
+
+export async function disconnectTelegram() {
+  const response = await fetch(`${apiBase}/api/users/me/disconnect/telegram`, {
+    method: "POST",
+    headers: authHeader()
+  });
+  if (!response.ok) {
+    throw new Error("Unable to disconnect Telegram.");
+  }
+}
+
+export async function disconnectSlack() {
+  const response = await fetch(`${apiBase}/api/users/me/disconnect/slack`, {
+    method: "POST",
+    headers: authHeader()
+  });
+  if (!response.ok) {
+    throw new Error("Unable to disconnect Slack.");
+  }
+}
