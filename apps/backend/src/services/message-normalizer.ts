@@ -89,6 +89,8 @@ const slackEventSchema = z.object({
       text: z.string().optional(),
       channel: z.string().optional(),
       user: z.string().optional(),
+      subtype: z.string().optional(),
+      team: z.string().optional(),
       bot_id: z.string().optional(),
       ts: z.string().optional()
     })
@@ -99,20 +101,29 @@ export function normalizeSlackMessage(payload: unknown): NormalizedMessage | nul
   const parsed = slackEventSchema.parse(payload);
   const event = parsed.event;
 
-  if (!event || event.type !== "message" || event.bot_id || !event.text?.trim() || !event.channel) {
+  if (
+    !event ||
+    event.type !== "message" ||
+    event.bot_id ||
+    event.subtype ||
+    !event.user ||
+    !event.text?.trim() ||
+    !event.channel
+  ) {
     return null;
   }
 
   return {
     channel: "slack",
-    sessionId: event.user ? `slack-user:${event.user}` : `slack-channel:${event.channel}`,
+    sessionId: `slack-user:${event.user}`,
     userId: event.user,
-    identityKey: event.user ? `slack-user:${event.user}` : `slack-channel:${event.channel}`,
+    identityKey: `slack-user:${event.user}`,
     text: event.text.trim(),
     type: "text",
     timestamp: new Date().toISOString(),
     metadata: {
       channelId: event.channel,
+      teamId: event.team,
       slackTs: event.ts
     },
     channelAddress: {

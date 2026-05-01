@@ -97,10 +97,30 @@ export async function linkUserIdentities(input: {
       }
     });
 
+    const sessionIdsToBackfill: string[] = [];
+    if (link.channel === "slack") {
+      sessionIdsToBackfill.push(`slack-user:${link.externalUserId}`);
+    } else if (link.channel === "telegram") {
+      sessionIdsToBackfill.push(`telegram-user:${link.externalUserId}`);
+    }
+
     await prisma.conversation.updateMany({
       where: {
         channel: link.channel,
-        userId: link.externalUserId
+        OR: [
+          {
+            userId: link.externalUserId
+          },
+          ...(sessionIdsToBackfill.length
+            ? [
+                {
+                  sessionId: {
+                    in: sessionIdsToBackfill
+                  }
+                }
+              ]
+            : [])
+        ]
       },
       data: {
         profileId: profile.id
